@@ -20,50 +20,68 @@ export default function ExcelCSVImportForm() {
   const [error, setError] = useState<string | null>(null)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    setError(null)
-
+    const file = e.target.files?.[0];
+    setError(null);
+  
     if (file) {
-      const reader = new FileReader()
+      const reader = new FileReader();
+  
       reader.onload = (evt) => {
         try {
           if (evt.target) {
-            const bstr = evt.target.result
-            const wb = XLSX.read(bstr, { type: 'binary' })
-            const wsname = wb.SheetNames[0]
-            const ws = wb.Sheets[wsname]
-            const data = XLSX.utils.sheet_to_json(ws, { header: 1 })
-
+            const arrayBuffer = evt.target.result as ArrayBuffer;
+            const wb = XLSX.read(arrayBuffer, { type: 'array' });
+            const wsname = wb.SheetNames[0];
+            const ws = wb.Sheets[wsname];
+  
+            // Read the data, with the first row as header
+            const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as string[][];
+            console.log(data)
             if (data.length > 1) {
-              const newData: FormData[] = []
-              data.map((item) => {
-                const [name, email, age] = item as unknown[];
-                if (name && email && age) {
-                  newData.push(...[{ 
-                    name: name as string, 
-                    email: email as string,
-                    age: age.toString() 
-                  }])
-                } else {
-                  throw new Error('Invalid data format. Please ensure your file format columns.')
-                }
-              })
+              const [headers, ...rows] = data;  // Destructure the first row as headers
+  
+              // Ensure the required headers are present
+              const nameIndex = headers.indexOf('Name');
+              const emailIndex = headers.indexOf('Email');
+              const ageIndex = headers.indexOf('Age');
 
-              setFormData(newData)
+              if (nameIndex === -1 || emailIndex === -1 || ageIndex === -1) {
+                throw new Error('Invalid headers. Ensure the columns are labeled Name, Email, and Age.');
+              }
+  
+              const newData: FormData[] = rows.map((row) => {
+                const name = row[nameIndex];
+                const email = row[emailIndex];
+                const age = row[ageIndex];
+  
+                if (name && email && age) {
+                  return {
+                    name: name as string,
+                    email: email as string,
+                    age: age.toString(), // Convert number to string for consistency
+                  };
+                } else {
+                  throw new Error('Invalid row data. Ensure each row has Name, Email, and Age.');
+                }
+              });
+  
+              setFormData(newData); // Update state with the parsed data
             } else {
-              throw new Error('The file appears to be empty or missing data.')
+              throw new Error('The file appears to be empty or missing data.');
             }
           }
         } catch (error) {
-          setError(error instanceof Error ? error.message : 'An unknown error occurred while parsing the file.')
+          setError(error instanceof Error ? error.message : 'An unknown error occurred while parsing the file.');
         }
-      }
+      };
+  
       reader.onerror = () => {
-        setError('An error occurred while reading the file.')
-      }
-      reader.readAsBinaryString(file)
+        setError('An error occurred while reading the file.');
+      };
+  
+      reader.readAsArrayBuffer(file); // Read as ArrayBuffer for better compatibility
     }
-  }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -98,7 +116,7 @@ export default function ExcelCSVImportForm() {
           )}
         </div>
         <form onSubmit={handleSubmit}>
-          {formData?.length > 0 && 
+          {formData?.length > 0 &&
             formData?.map((data, index) => (
               <div key={index} className="w-full flex gap-2 items-center mb-3">
                 <Input
