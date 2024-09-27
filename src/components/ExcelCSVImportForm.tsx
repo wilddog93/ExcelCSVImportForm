@@ -4,84 +4,103 @@ import * as XLSX from 'xlsx'
 
 interface FormData {
   name?: string
-  email?: string
-  age?: string
+  type?: string
+  mode?: string
 }
 
 export default function ExcelCSVImportForm() {
   const [formData, setFormData] = useState<FormData[]>([
     {
       name: '',
-      email: '',
-      age: '',
+      type: '',
+      mode: '',
     }
   ])
 
   const [error, setError] = useState<string | null>(null)
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
   
-    if (file) {
+    // Get all files from the input
+    const files = e.target.files;
+    if (!files) return;
+  
+    const formDataArray: FormData[] = [];
+  
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const data = await readFile(file); // Read and parse file asynchronously
+  
+        if (data.length > 1) {
+          const [headers, ...rows] = data;
+  
+          // Ensure the required headers are present
+          const nameIndex = headers.indexOf('COLUMN_NAME');
+          const typeIndex = headers.indexOf('DATA_TYPE');
+          const modeIndex = headers.indexOf('IS_NULLABLE');
+  
+          if (nameIndex === -1 || typeIndex === -1 || modeIndex === -1) {
+            throw new Error(`File "${file.name}" has invalid headers. Ensure the columns are labeled Name as COLUMN_NAME, Type as DATA_TYPE, and Mode as IS_NULLABLE.`);
+          }
+  
+          const newFileData: FormData[] = rows.map((row) => {
+            const name = row[nameIndex];
+            const type = row[typeIndex];
+            const mode = row[modeIndex];
+  
+            if (name && type && mode) {
+              return {
+                name: name as string,
+                type: type as string,
+                mode: mode as string,
+              };
+            } else {
+              throw new Error(`File "${file.name}" has invalid row data. Ensure each row has COLUMN_NAME, DATA_TYPE, and IS_NULLABLE.`);
+            }
+          });
+  
+          formDataArray.push(...newFileData); // Merge data from all files
+        } else {
+          throw new Error(`The file "${file.name}" appears to be empty or missing data.`);
+        }
+      }
+  
+      setFormData(formDataArray); // Update state with the combined data from all files
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred while parsing the file.');
+    }
+  };
+  
+  // Helper function to read and parse the file using async/await
+  const readFile = (file: File): Promise<string[][]> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
   
       reader.onload = (evt) => {
-        try {
-          if (evt.target) {
+        if (evt.target) {
+          try {
             const arrayBuffer = evt.target.result as ArrayBuffer;
             const wb = XLSX.read(arrayBuffer, { type: 'array' });
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
   
-            // Read the data, with the first row as header
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as string[][];
-            console.log(data)
-            if (data.length > 1) {
-              const [headers, ...rows] = data;  // Destructure the first row as headers
-  
-              // Ensure the required headers are present
-              const nameIndex = headers.indexOf('Name');
-              const emailIndex = headers.indexOf('Email');
-              const ageIndex = headers.indexOf('Age');
-
-              if (nameIndex === -1 || emailIndex === -1 || ageIndex === -1) {
-                throw new Error('Invalid headers. Ensure the columns are labeled Name, Email, and Age.');
-              }
-  
-              const newData: FormData[] = rows.map((row) => {
-                const name = row[nameIndex];
-                const email = row[emailIndex];
-                const age = row[ageIndex];
-  
-                if (name && email && age) {
-                  return {
-                    name: name as string,
-                    email: email as string,
-                    age: age.toString(), // Convert number to string for consistency
-                  };
-                } else {
-                  throw new Error('Invalid row data. Ensure each row has Name, Email, and Age.');
-                }
-              });
-  
-              setFormData(newData); // Update state with the parsed data
-            } else {
-              throw new Error('The file appears to be empty or missing data.');
-            }
+            resolve(data);
+          } catch (error) {
+            reject(error);
           }
-        } catch (error) {
-          setError(error instanceof Error ? error.message : 'An unknown error occurred while parsing the file.');
         }
       };
   
       reader.onerror = () => {
-        setError('An error occurred while reading the file.');
+        reject('An error occurred while reading the file.');
       };
   
       reader.readAsArrayBuffer(file); // Read as ArrayBuffer for better compatibility
-    }
-  };
+    });
+  };  
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -128,20 +147,20 @@ export default function ExcelCSVImportForm() {
                   required
                 />
                 <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  label='Email'
-                  value={data.email}
+                  id="type"
+                  name="type"
+                  type="type"
+                  label='Type'
+                  value={data.type}
                   onChange={handleInputChange}
                   required
                 />
                 <Input
-                  id="age"
-                  name="age"
-                  type="number"
-                  label='Age'
-                  value={data.age}
+                  id="mode"
+                  name="mode"
+                  type="text"
+                  label='Mode'
+                  value={data.mode}
                   onChange={handleInputChange}
                   required
                 />
